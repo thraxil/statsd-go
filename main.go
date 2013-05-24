@@ -227,7 +227,7 @@ func submit() {
 	gmSubmit("statsd_numStats", uint32(numStats))
 	if clientGraphite != nil {
 		if *debug {
-			log.Println("Send to graphite: [[[%s]]]\n", string(buffer.Bytes()))
+			log.Println(fmt.Sprintf("Send to graphite: [[[%s]]]\n", string(buffer.Bytes())))
 		}
 		clientGraphite.Write(buffer.Bytes())
 	}
