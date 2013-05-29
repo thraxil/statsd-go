@@ -209,15 +209,15 @@ func submit() {
 			gmSubmit(fmt.Sprintf("stats_timers_%s_count", u), uint32(count))
 		} else {
 			// Need to still submit timers as zero
-			fmt.Fprintf(buffer, "stats.timers.%s.mean %f %d\n", u, 0, now)
-			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_mean", u), 0)
-			fmt.Fprintf(buffer, "stats.timers.%s.upper %f %d\n", u, 0, now)
-			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_upper", u), 0)
+			fmt.Fprintf(buffer, "stats.timers.%s.mean %f %d\n", u, 0.0, now)
+			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_mean", u), 0.0)
+			fmt.Fprintf(buffer, "stats.timers.%s.upper %f %d\n", u, 0.0, now)
+			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_upper", u), 0.0)
 			fmt.Fprintf(buffer, "stats.timers.%s.upper_%d %f %d\n", u,
-				*percentThreshold, 0, now)
-			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_upper_%d", u, *percentThreshold), 0)
-			fmt.Fprintf(buffer, "stats.timers.%s.lower %f %d\n", u, 0, now)
-			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_lower", u), 0)
+				*percentThreshold, 0.0, now)
+			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_upper_%d", u, *percentThreshold), 0.0)
+			fmt.Fprintf(buffer, "stats.timers.%s.lower %f %d\n", u, 0.0, now)
+			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_lower", u), 0.0)
 			fmt.Fprintf(buffer, "stats.timers.%s.count %d %d\n", u, 0, now)
 			gmSubmit(fmt.Sprintf("stats_timers_%s_count", u), uint32(0))
 		}
