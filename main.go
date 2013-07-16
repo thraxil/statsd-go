@@ -34,6 +34,9 @@ var (
 	gangliaSpoofHost = flag.String("ganglia-spoof-host", "", "Ganglia gmond spoof host string")
 	flushInterval    = flag.Int64("flush-interval", 10, "Flush interval")
 	percentThreshold = flag.Int("percent-threshold", 90, "Threshold percent")
+	statsPrefix      = flag.String("stats-prefix", "stats.", "Counters Prefix")
+	countersPrefix   = flag.String("counters-prefix", "stats_counts.", "Counters Prefix")
+	timersPrefix     = flag.String("timers-prefix", "stats.timers.", "Timers Prefix")
 	debug            = flag.Bool("debug", false, "Debug mode")
 )
 
@@ -160,16 +163,16 @@ func submit() {
 	buffer := bytes.NewBufferString("")
 	for s, c := range counters {
 		value := float64(c) / float64((float64(*flushInterval)*float64(time.Second))/float64(1e3))
-		fmt.Fprintf(buffer, "stats.%s %d %d\n", s, value, now)
+		fmt.Fprintf(buffer, "%s%s %d %d\n", *statsPrefix, s, value, now)
 		gmSubmitFloat(fmt.Sprintf("stats_%s", s), value)
-		fmt.Fprintf(buffer, "stats_counts.%s %d %d\n", s, c, now)
+		fmt.Fprintf(buffer, "%s%s %d %d\n", *countersPrefix, s, c, now)
 		gmSubmit(fmt.Sprintf("stats_counts_%s", s), uint32(c))
 		counters[s] = 0
 		numStats++
 	}
 	for i, g := range gauges {
 		value := int64(g)
-		fmt.Fprintf(buffer, "stats.%s %d %d\n", i, value, now)
+		fmt.Fprintf(buffer, "%s%s %d %d\n", *statsPrefix, i, value, now)
 		gmSubmit(fmt.Sprintf("stats_%s", i), uint32(value))
 		numStats++
 	}
@@ -196,34 +199,34 @@ func submit() {
 			var z []float64
 			timers[u] = z
 
-			fmt.Fprintf(buffer, "stats.timers.%s.mean %f %d\n", u, mean, now)
+			fmt.Fprintf(buffer, "%s%s.mean %f %d\n", *timersPrefix, u, mean, now)
 			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_mean", u), mean)
-			fmt.Fprintf(buffer, "stats.timers.%s.upper %f %d\n", u, max, now)
+			fmt.Fprintf(buffer, "%s%s.upper %f %d\n", *timersPrefix, u, max, now)
 			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_upper", u), max)
-			fmt.Fprintf(buffer, "stats.timers.%s.upper_%d %f %d\n", u,
+			fmt.Fprintf(buffer, "%s%s.upper_%d %f %d\n", *timersPrefix, u,
 				*percentThreshold, maxAtThreshold, now)
 			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_upper_%d", u, *percentThreshold), maxAtThreshold)
-			fmt.Fprintf(buffer, "stats.timers.%s.lower %f %d\n", u, min, now)
+			fmt.Fprintf(buffer, "%s%s.lower %f %d\n", *timersPrefix, u, min, now)
 			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_lower", u), min)
-			fmt.Fprintf(buffer, "stats.timers.%s.count %d %d\n", u, count, now)
+			fmt.Fprintf(buffer, "%s%s.count %d %d\n", *timersPrefix, u, count, now)
 			gmSubmit(fmt.Sprintf("stats_timers_%s_count", u), uint32(count))
 		} else {
 			// Need to still submit timers as zero
-			fmt.Fprintf(buffer, "stats.timers.%s.mean %f %d\n", u, 0.0, now)
+			fmt.Fprintf(buffer, "%s%s.mean %f %d\n", *timersPrefix, u, 0.0, now)
 			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_mean", u), 0.0)
-			fmt.Fprintf(buffer, "stats.timers.%s.upper %f %d\n", u, 0.0, now)
+			fmt.Fprintf(buffer, "%s%s.upper %f %d\n", *timersPrefix, u, 0.0, now)
 			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_upper", u), 0.0)
-			fmt.Fprintf(buffer, "stats.timers.%s.upper_%d %f %d\n", u,
+			fmt.Fprintf(buffer, "%s%s.upper_%d %f %d\n", *timersPrefix, u,
 				*percentThreshold, 0.0, now)
 			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_upper_%d", u, *percentThreshold), 0.0)
-			fmt.Fprintf(buffer, "stats.timers.%s.lower %f %d\n", u, 0.0, now)
+			fmt.Fprintf(buffer, "%s%s.lower %f %d\n", *timersPrefix, u, 0.0, now)
 			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_lower", u), 0.0)
-			fmt.Fprintf(buffer, "stats.timers.%s.count %d %d\n", u, 0, now)
+			fmt.Fprintf(buffer, "%s%s.count %d %d\n", *timersPrefix, u, 0, now)
 			gmSubmit(fmt.Sprintf("stats_timers_%s_count", u), uint32(0))
 		}
 		numStats++
 	}
-	fmt.Fprintf(buffer, "statsd.numStats %d %d\n", numStats, now)
+	fmt.Fprintf(buffer, "%sstatsd.numStats %d %d\n", *statsPrefix, numStats, now)
 	gmSubmit("statsd_numStats", uint32(numStats))
 	if clientGraphite != nil {
 		if *debug {
