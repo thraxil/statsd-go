@@ -35,7 +35,8 @@ var (
 	flushInterval    = flag.Int64("flush-interval", 10, "Flush interval")
 	percentThreshold = flag.Int("percent-threshold", 90, "Threshold percent")
 	statsPrefix      = flag.String("stats-prefix", "stats.", "Counters Prefix")
-	countersPrefix   = flag.String("counters-prefix", "stats_counts.", "Counters Prefix")
+	countersPrefix   = flag.String("counters-prefix", "stats.counters.", "Counters Prefix")
+	gaugesPrefix     = flag.String("gauges-prefix", "stats.gauges.", "Gauges Prefix")
 	timersPrefix     = flag.String("timers-prefix", "stats.timers.", "Timers Prefix")
 	debug            = flag.Bool("debug", false, "Debug mode")
 )
@@ -72,8 +73,16 @@ func monitor() {
 				if !ok {
 					gauges[s.Bucket] = 0
 				}
-				intValue, _ := strconv.Atoi(s.Value)
-				gauges[s.Bucket] += intValue
+				if strings.HasPrefix(s.Value, "+") {
+					intValue, _ := strconv.Atoi(s.Value[1:])
+					gauges[s.Bucket] += intValue
+				} else if strings.HasPrefix(s.Value, "-") {
+					intValue, _ := strconv.Atoi(s.Value[1:])
+					gauges[s.Bucket] -= intValue
+				} else {
+					intValue, _ := strconv.Atoi(s.Value)
+					gauges[s.Bucket] = intValue
+				}
 			} else {
 				_, ok := counters[s.Bucket]
 				if !ok {
@@ -172,7 +181,7 @@ func submit() {
 	}
 	for i, g := range gauges {
 		value := int64(g)
-		fmt.Fprintf(buffer, "%s%s %d %d\n", *statsPrefix, i, value, now)
+		fmt.Fprintf(buffer, "%s%s %d %d\n", *gaugesPrefix, i, value, now)
 		gmSubmit(fmt.Sprintf("stats_%s", i), uint32(value))
 		numStats++
 	}
@@ -240,7 +249,7 @@ func handleMessage(conn *net.UDPConn, remaddr net.Addr, buf *bytes.Buffer) {
 	var packet Packet
 	var value string
 	var sanitizeRegexp = regexp.MustCompile("[^a-zA-Z0-9\\-_\\.:\\|@]")
-	var packetRegexp = regexp.MustCompile("([a-zA-Z0-9_\\.]+):(\\-?[0-9\\.]+)\\|(c|ms)(\\|@([0-9\\.]+))?")
+	var packetRegexp = regexp.MustCompile("([a-zA-Z0-9_\\.]+):(\\-?[0-9\\.]+)\\|(c|ms|g)(\\|@([0-9\\.]+))?")
 	s := sanitizeRegexp.ReplaceAllString(buf.String(), "")
 	for _, item := range packetRegexp.FindAllStringSubmatch(s, -1) {
 		value = item[2]
@@ -262,7 +271,9 @@ func handleMessage(conn *net.UDPConn, remaddr net.Addr, buf *bytes.Buffer) {
 		packet.Sampling = float32(sampleRate)
 
 		if *debug {
-			log.Println("Packet: bucket = %s, value = %s, modifier = %s, sampling = %f\n", packet.Bucket, packet.Value, packet.Modifier, packet.Sampling)
+			log.Println(
+				fmt.Sprintf("Packet: bucket = %s, value = %s, modifier = %s, sampling = %f\n",
+					packet.Bucket, packet.Value, packet.Modifier, packet.Sampling))
 		}
 
 		In <- packet
