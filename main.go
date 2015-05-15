@@ -11,8 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/jbuchbinder/go-gmetric/gmetric"
 )
 
 const (
@@ -30,9 +28,6 @@ type Packet struct {
 var (
 	serviceAddress   = flag.String("address", ":8125", "UDP service address")
 	graphiteAddress  = flag.String("graphite", "", "Graphite service address (example: 'localhost:2003')")
-	gangliaAddress   = flag.String("ganglia", "", "Ganglia gmond servers, comma separated")
-	gangliaPort      = flag.Int("ganglia-port", 8649, "Ganglia gmond service port")
-	gangliaSpoofHost = flag.String("ganglia-spoof-host", "", "Ganglia gmond spoof host string")
 	flushInterval    = flag.Int64("flush-interval", 10, "Flush interval")
 	percentThreshold = flag.Int("percent-threshold", 90, "Threshold percent")
 	statsPrefix      = flag.String("stats-prefix", "stats.", "Counters Prefix")
@@ -109,81 +104,20 @@ func submit() {
 			log.Printf(err.Error())
 		}
 	}
-	var useGanglia bool
-	var gm gmetric.Gmetric
-	gmSubmit := func(name string, value uint32) {
-		if useGanglia {
-			if *debug {
-				log.Println("Ganglia send metric %s value %d\n", name, value)
-			}
-			m_value := fmt.Sprint(value)
-			m_units := "count"
-			m_type := uint32(gmetric.VALUE_UNSIGNED_INT)
-			m_slope := uint32(gmetric.SLOPE_BOTH)
-			m_grp := "statsd"
-			m_ival := uint32(*flushInterval * int64(2))
 
-			go gm.SendMetric(name, m_value, m_type, m_units, m_slope, m_ival, m_ival, m_grp)
-		}
-	}
-	gmSubmitFloat := func(name string, value float64) {
-		if useGanglia {
-			if *debug {
-				log.Println("Ganglia send float metric %s value %f\n", name, value)
-			}
-			m_value := fmt.Sprint(value)
-			m_units := "count"
-			m_type := uint32(gmetric.VALUE_DOUBLE)
-			m_slope := uint32(gmetric.SLOPE_BOTH)
-			m_grp := "statsd"
-			m_ival := uint32(*flushInterval * int64(2))
-
-			go gm.SendMetric(name, m_value, m_type, m_units, m_slope, m_ival, m_ival, m_grp)
-		}
-	}
-	if *gangliaAddress != "" {
-		gm = gmetric.Gmetric{
-			Host:  *gangliaSpoofHost,
-			Spoof: *gangliaSpoofHost,
-		}
-		gm.SetVerbose(false)
-
-		if strings.Contains(*gangliaAddress, ",") {
-			segs := strings.Split(*gangliaAddress, ",")
-			for i := 0; i < len(segs); i++ {
-				gIP, err := net.ResolveIPAddr("ip4", segs[i])
-				if err != nil {
-					panic(err.Error())
-				}
-				gm.AddServer(gmetric.GmetricServer{gIP.IP, *gangliaPort})
-			}
-		} else {
-			gIP, err := net.ResolveIPAddr("ip4", *gangliaAddress)
-			if err != nil {
-				panic(err.Error())
-			}
-			gm.AddServer(gmetric.GmetricServer{gIP.IP, *gangliaPort})
-		}
-		useGanglia = true
-	} else {
-		useGanglia = false
-	}
 	numStats := 0
 	now := int32(time.Now().Unix())
 	buffer := bytes.NewBufferString("")
 	for s, c := range counters {
 		value := float64(c) / float64((float64(*flushInterval)*float64(time.Second))/float64(1e3))
 		fmt.Fprintf(buffer, "%s%s %f %d\n", *statsPrefix, s, value, now)
-		gmSubmitFloat(fmt.Sprintf("stats_%s", s), value)
 		fmt.Fprintf(buffer, "%s%s %d %d\n", *countersPrefix, s, c, now)
-		gmSubmit(fmt.Sprintf("stats_counts_%s", s), uint32(c))
 		counters[s] = 0
 		numStats++
 	}
 	for i, g := range gauges {
 		value := int64(g)
 		fmt.Fprintf(buffer, "%s%s %d %d\n", *gaugesPrefix, i, value, now)
-		gmSubmit(fmt.Sprintf("stats_%s", i), uint32(value))
 		numStats++
 	}
 	for u, t := range timers {
@@ -210,34 +144,23 @@ func submit() {
 			timers[u] = z
 
 			fmt.Fprintf(buffer, "%s%s.mean %f %d\n", *timersPrefix, u, mean, now)
-			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_mean", u), mean)
 			fmt.Fprintf(buffer, "%s%s.upper %f %d\n", *timersPrefix, u, max, now)
-			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_upper", u), max)
 			fmt.Fprintf(buffer, "%s%s.upper_%d %f %d\n", *timersPrefix, u,
 				*percentThreshold, maxAtThreshold, now)
-			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_upper_%d", u, *percentThreshold), maxAtThreshold)
 			fmt.Fprintf(buffer, "%s%s.lower %f %d\n", *timersPrefix, u, min, now)
-			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_lower", u), min)
 			fmt.Fprintf(buffer, "%s%s.count %d %d\n", *timersPrefix, u, count, now)
-			gmSubmit(fmt.Sprintf("stats_timers_%s_count", u), uint32(count))
 		} else {
 			// Need to still submit timers as zero
 			fmt.Fprintf(buffer, "%s%s.mean %f %d\n", *timersPrefix, u, 0.0, now)
-			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_mean", u), 0.0)
 			fmt.Fprintf(buffer, "%s%s.upper %f %d\n", *timersPrefix, u, 0.0, now)
-			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_upper", u), 0.0)
 			fmt.Fprintf(buffer, "%s%s.upper_%d %f %d\n", *timersPrefix, u,
 				*percentThreshold, 0.0, now)
-			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_upper_%d", u, *percentThreshold), 0.0)
 			fmt.Fprintf(buffer, "%s%s.lower %f %d\n", *timersPrefix, u, 0.0, now)
-			gmSubmitFloat(fmt.Sprintf("stats_timers_%s_lower", u), 0.0)
 			fmt.Fprintf(buffer, "%s%s.count %d %d\n", *timersPrefix, u, 0, now)
-			gmSubmit(fmt.Sprintf("stats_timers_%s_count", u), uint32(0))
 		}
 		numStats++
 	}
 	fmt.Fprintf(buffer, "%sstatsd.numStats %d %d\n", *statsPrefix, numStats, now)
-	gmSubmit("statsd_numStats", uint32(numStats))
 	if clientGraphite != nil {
 		if *debug {
 			log.Println(fmt.Sprintf("Send to graphite: [[[%s]]]\n", string(buffer.Bytes())))
