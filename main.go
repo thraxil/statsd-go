@@ -51,6 +51,9 @@ func monitor() {
 	}
 	t := time.NewTicker(time.Duration(*flushInterval) * time.Second)
 	for {
+		if *debug {
+			log.Println("tick")
+		}
 		select {
 		case <-t.C:
 			submit()
